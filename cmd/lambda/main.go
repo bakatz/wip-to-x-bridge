@@ -111,7 +111,7 @@ func Handler(ctx context.Context) (Response, error) {
 		Host:       "https://api.twitter.com",
 	}
 
-	startOfLookbackWindow := time.Now().UTC().Add(LOOKBACK_WINDOW_MINUTES)
+	startOfLookbackWindow := time.Now().UTC().Add(-LOOKBACK_WINDOW_MINUTES * time.Minute)
 	numTodosTweeted := 0
 	for _, project := range wipResponse.Data.Viewer.Projects {
 		for _, todo := range project.Todos {
