@@ -119,9 +119,9 @@ func Handler(ctx context.Context) (Response, error) {
 			if todo.CompletedAt.Before(startOfLookbackWindow) {
 				continue
 			}
-			tweetMessage := "Just completed a task for " + project.Name + ": " + todo.Body
+			tweetMessage := "Just completed a task: " + todo.Body
 			if len(todo.Attachments) > 0 {
-				tweetMessage += " " + todo.Attachments[0].URL
+				tweetMessage += " " + todo.Attachments[0].URL // Just use the first attachment for now
 			}
 			logger.Info("About to tweet this message: " + tweetMessage)
 			_, err := twitterClient.CreateTweet(context.Background(), twitter.CreateTweetRequest{
