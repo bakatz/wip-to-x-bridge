@@ -119,7 +119,7 @@ func Handler(ctx context.Context) (Response, error) {
 			if todo.CompletedAt.Before(startOfLookbackWindow) {
 				continue
 			}
-			tweetMessage := "Just completed a task: " + todo.Body
+			tweetMessage := "✅ " + todo.Body
 			if len(todo.Attachments) > 0 {
 				tweetMessage += " " + todo.Attachments[0].URL // Just use the first attachment for now
 			}
