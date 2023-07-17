@@ -121,7 +121,9 @@ func Handler(ctx context.Context) (Response, error) {
 			}
 			tweetMessage := "✅ " + todo.Body
 			if len(todo.Attachments) > 0 {
-				tweetMessage += " " + todo.Attachments[0].URL // Just use the first attachment for now
+				tweetMessage += " " + todo.Attachments[0].URL + " #buildinpublic" // Just use the first attachment for now
+			} else {
+				tweetMessage += " #buildinpublic"
 			}
 			logger.Info("About to tweet this message: " + tweetMessage)
 			_, err := twitterClient.CreateTweet(context.Background(), twitter.CreateTweetRequest{
