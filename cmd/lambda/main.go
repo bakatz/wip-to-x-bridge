@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
@@ -24,6 +25,7 @@ type Response struct {
 }
 
 const (
+	PRIVATE_ENTITY_IDENTIFIER     = "!private"
 	LOOKBACK_WINDOW_MINUTES       = 60
 	SUCCESS_MESSAGE               = "Function finished without errors"
 	CONNECTION_TIMEOUT_DURATION   = 5 * time.Second
@@ -33,6 +35,7 @@ const (
 			projects {
 				id
 				name
+				pitch
 				website_url
 				todos(completed:true, orderBy: { completedAt:desc }) {
 					id
@@ -114,9 +117,15 @@ func Handler(ctx context.Context) (Response, error) {
 	startOfLookbackWindow := time.Now().UTC().Add(-LOOKBACK_WINDOW_MINUTES * time.Minute)
 	numTodosTweeted := 0
 	for _, project := range wipResponse.Data.Viewer.Projects {
+		// Skip replicating all todos in projects marked as "private"
+		if strings.Contains(project.Pitch, PRIVATE_ENTITY_IDENTIFIER) {
+			continue
+		}
+
 		for _, todo := range project.Todos {
 			// If this todo was completed more than an hour ago, don't bother tweeting about it because we've already covered it in a previous run (we run every hour to catch todos from the previous hour)
-			if todo.CompletedAt.Before(startOfLookbackWindow) {
+			// Also skip private todos that should not be replicated to twitter.
+			if todo.CompletedAt.Before(startOfLookbackWindow) || strings.Contains(todo.Body, PRIVATE_ENTITY_IDENTIFIER) {
 				continue
 			}
 			tweetMessage := "✅ " + todo.Body

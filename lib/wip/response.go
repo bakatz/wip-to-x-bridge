@@ -17,6 +17,7 @@ type Todo struct {
 type Project struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
+	Pitch      string `json:"pitch"`
 	WebsiteURL string `json:"website_url"`
 	Todos      []Todo `json:"todos"`
 }
