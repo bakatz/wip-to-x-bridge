@@ -10,7 +10,7 @@
 # Deployment instructions
 It's recommended to deploy this to AWS as it's completely free for this use case.
 1. Sign up for an AWS account
-2. Create a Lambda function, make sure you select `go 1.x` as the runtime
+2. Create a Lambda function, make sure you select `Custom runtime on Amazon Linux 2` as the runtime
 3. Change the handler to `bootstrap`
 4. Make sure the input is set to Event Bridge with the following settings (change the cron expression depending on how often you want this to run - if you aren't familiar with cron expressions, check out https://crontab.guru):
 
