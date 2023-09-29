@@ -3,19 +3,22 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	twitter11 "github.com/ChimeraCoder/anaconda"
 	"github.com/aws/aws-lambda-go/lambda"
 	lib_wip "github.com/bakatz/wip-to-twitter-bridge/lib/wip"
 	"github.com/dghubble/oauth1"
-	twitter "github.com/g8rswimmer/go-twitter/v2"
+	twitter2 "github.com/g8rswimmer/go-twitter/v2"
 	"github.com/joho/godotenv"
-	"go.uber.org/zap"
 )
 
 type Response struct {
@@ -56,15 +59,14 @@ type authorize struct{}
 
 func (a authorize) Add(req *http.Request) {}
 
-func makeAndLogErrorResponse(message string, code string, logger *zap.Logger) Response {
+func makeAndLogErrorResponse(message string, code string, logger *slog.Logger) Response {
 	response := Response{Message: message, Code: code}
-	logger.Sugar().Error("Response: ", response)
+	logger.Error("Returning an error response", "response", response)
 	return response
 }
 
 func Handler(ctx context.Context) (Response, error) {
-	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	// Get all the secrets we need
 	wipAPIKey := os.Getenv("WIP_API_KEY")
@@ -108,7 +110,8 @@ func Handler(ctx context.Context) (Response, error) {
 		TokenSecret: twitterAccessTokenSecret,
 	})
 	twitterHttpClient.Timeout = CONNECTION_TIMEOUT_DURATION
-	twitterClient := &twitter.Client{
+	twitter11Client := twitter11.NewTwitterApiWithCredentials(twitterAccessToken, twitterAccessTokenSecret, twitterAPIKey, twitterAPIKeySecret)
+	twitter2Client := &twitter2.Client{
 		Authorizer: authorize{},
 		Client:     twitterHttpClient,
 		Host:       "https://api.twitter.com",
@@ -128,16 +131,29 @@ func Handler(ctx context.Context) (Response, error) {
 			if todo.CompletedAt.Before(startOfLookbackWindow) || strings.Contains(todo.Body, PRIVATE_ENTITY_IDENTIFIER) {
 				continue
 			}
-			tweetMessage := "✅ " + todo.Body
-			if len(todo.Attachments) > 0 {
-				tweetMessage += " " + todo.Attachments[0].URL + " #buildinpublic" // Just use the first attachment for now
-			} else {
-				tweetMessage += " #buildinpublic"
+			tweetMessage := "✅ " + todo.Body + " #buildinpublic"
+			mediaIDs := []string{}
+
+			for _, attachment := range todo.Attachments {
+				mediaID, err := uploadAttachmentFromTodo(attachment, logger, twitter11Client)
+				if err != nil {
+					return makeAndLogErrorResponse("Error uploading attachment", "upload_attachment_error", logger), err
+				}
+				mediaIDs = append(mediaIDs, mediaID)
 			}
-			logger.Info("About to tweet this message: " + tweetMessage)
-			_, err := twitterClient.CreateTweet(context.Background(), twitter.CreateTweetRequest{
+
+			logger.Info("About to tweet this message", "message", tweetMessage)
+
+			createTweetRequest := &twitter2.CreateTweetRequest{
 				Text: tweetMessage,
-			})
+			}
+
+			if len(mediaIDs) > 0 {
+				createTweetRequest.Media = &twitter2.CreateTweetMedia{
+					IDs: mediaIDs,
+				}
+			}
+			_, err := twitter2Client.CreateTweet(context.Background(), *createTweetRequest)
 			if err != nil {
 				return makeAndLogErrorResponse("Error creating a tweet", "twitter_create_tweet_error", logger), err
 			}
@@ -147,8 +163,25 @@ func Handler(ctx context.Context) (Response, error) {
 	}
 
 	// Return a success message
-	logger.Info(SUCCESS_MESSAGE, zap.Int("num_todos_tweeted", numTodosTweeted))
+	logger.Info(SUCCESS_MESSAGE, "num_todos_tweeted", numTodosTweeted)
 	return Response{Message: SUCCESS_MESSAGE, NumTodosTweeted: numTodosTweeted}, nil
+}
+
+func uploadAttachmentFromTodo(attachment lib_wip.Attachment, logger *slog.Logger, twitter11Client *twitter11.TwitterApi) (string, error) {
+	resp, err := http.Get(attachment.URL)
+	if err != nil {
+		return "", err
+	}
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	media, err := twitter11Client.UploadMedia(base64.StdEncoding.EncodeToString(respBytes))
+	if err != nil {
+		return "", err
+	}
+	return strconv.FormatInt(media.MediaID, 10), err
 }
 
 func main() {

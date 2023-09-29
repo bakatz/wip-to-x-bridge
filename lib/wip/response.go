@@ -5,14 +5,14 @@ import "time"
 type WIPAPIResponse struct {
 	Data Data `json:"data"`
 }
-type Attachments struct {
+type Attachment struct {
 	URL string `json:"url"`
 }
 type Todo struct {
-	ID          string        `json:"id"`
-	Body        string        `json:"body"`
-	CompletedAt time.Time     `json:"completed_at"`
-	Attachments []Attachments `json:"attachments"`
+	ID          string       `json:"id"`
+	Body        string       `json:"body"`
+	CompletedAt time.Time    `json:"completed_at"`
+	Attachments []Attachment `json:"attachments"`
 }
 type Project struct {
 	ID         string `json:"id"`
