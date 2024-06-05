@@ -1,11 +1,11 @@
 module github.com/bakatz/wip-to-twitter-bridge
 
-go 1.21
+go 1.22
 
 require (
 	github.com/ChimeraCoder/anaconda v2.0.0+incompatible
-	github.com/aws/aws-lambda-go v1.41.0
-	github.com/dghubble/oauth1 v0.7.2
+	github.com/aws/aws-lambda-go v1.47.0
+	github.com/dghubble/oauth1 v0.7.3
 	github.com/g8rswimmer/go-twitter/v2 v2.1.5
 	github.com/joho/godotenv v1.5.1
 )
@@ -16,5 +16,5 @@ require (
 	github.com/dustin/go-jsonpointer v0.0.0-20160814072949-ba0abeacc3dc // indirect
 	github.com/dustin/gojson v0.0.0-20160307161227-2e71ec9dd5ad // indirect
 	github.com/garyburd/go-oauth v0.0.0-20180319155456-bca2e7f09a17 // indirect
-	golang.org/x/net v0.15.0 // indirect
+	golang.org/x/net v0.26.0 // indirect
 )

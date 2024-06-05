@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -33,25 +31,6 @@ const (
 	SUCCESS_MESSAGE               = "Function finished without errors"
 	CONNECTION_TIMEOUT_DURATION   = 5 * time.Second
 	CONTENT_TYPE_APPLICATION_JSON = "application/json"
-	WIP_API_GRAPHQL_QUERY         = `{
-		viewer {
-			projects {
-				id
-				name
-				pitch
-				website_url
-				todos(completed:true, orderBy: { completedAt:desc }) {
-					id
-					body
-					completed_at
-					attachments {
-						url
-					}
-				}
-			}
-		}
-	}
-	`
 )
 
 // Dummy auth struct just to satisfy the API
@@ -79,63 +58,41 @@ func Handler(ctx context.Context) (Response, error) {
 	}
 
 	// Get all of the completed todos from wip.co
-	graphQLRequestBytes, err := json.Marshal(map[string]string{
-		"query": WIP_API_GRAPHQL_QUERY,
-	})
-	if err != nil {
-		return makeAndLogErrorResponse("Error encoding WIP request body", "wip_request_encode_error", logger), err
-	}
-	req, err := http.NewRequest(http.MethodPost, "https://wip.co/graphql", bytes.NewBuffer(graphQLRequestBytes))
-	if err != nil {
-		return makeAndLogErrorResponse("Error creating WIP request", "wip_request_error", logger), err
-	}
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Authorization", "Bearer "+wipAPIKey)
-	wipHttpClient := &http.Client{Timeout: CONNECTION_TIMEOUT_DURATION}
-	resp, err := wipHttpClient.Do(req)
-	if err != nil || resp.StatusCode != 200 {
-		return makeAndLogErrorResponse("Error calling WIP's API; status code = "+strconv.Itoa(resp.StatusCode), "wip_api_error", logger), err
-	}
-	wipResponse := &lib_wip.WIPAPIResponse{}
-	err = json.NewDecoder(resp.Body).Decode(wipResponse)
+	wipClient := lib_wip.NewClient(wipAPIKey)
 
+	projectsLimit := 100
+	projects, err := wipClient.GetMyProjects(&projectsLimit, nil)
 	if err != nil {
-		return makeAndLogErrorResponse("Error decoding WIP's response body", "wip_response_decode_error", logger), err
+		return makeAndLogErrorResponse("Could not call GetMyProjects", "wip_api_error", logger), nil
 	}
 
-	// Send out a tweet for each of the completed todos
-	oauth1Config := oauth1.NewConfig(twitterAPIKey, twitterAPIKeySecret)
-	twitterHttpClient := oauth1Config.Client(oauth1.NoContext, &oauth1.Token{
-		Token:       twitterAccessToken,
-		TokenSecret: twitterAccessTokenSecret,
-	})
-	twitterHttpClient.Timeout = CONNECTION_TIMEOUT_DURATION
-	twitter11Client := twitter11.NewTwitterApiWithCredentials(twitterAccessToken, twitterAccessTokenSecret, twitterAPIKey, twitterAPIKeySecret)
-	twitter2Client := &twitter2.Client{
-		Authorizer: authorize{},
-		Client:     twitterHttpClient,
-		Host:       "https://api.twitter.com",
-	}
+	twitter11Client, twitter2Client := setupTwitterClients(twitterAPIKey, twitterAPIKeySecret, twitterAccessToken, twitterAccessTokenSecret)
 
 	startOfLookbackWindow := time.Now().UTC().Add(-LOOKBACK_WINDOW_MINUTES * time.Minute)
 	numTodosTweeted := 0
-	for _, project := range wipResponse.Data.Viewer.Projects {
+	// Send out a tweet for each of the completed todos
+	for _, project := range projects.Data {
 		// Skip replicating all todos in projects marked as "private"
 		if strings.Contains(project.Pitch, PRIVATE_ENTITY_IDENTIFIER) {
 			continue
 		}
 
-		for _, todo := range project.Todos {
+		todos, err := wipClient.GetProjectTodos(project.ID, nil, nil)
+		if err != nil {
+			return makeAndLogErrorResponse("Error getting project todos", "wip_api_error", logger), err
+		}
+
+		for _, todo := range todos.Data {
 			// If this todo was completed more than an hour ago, don't bother tweeting about it because we've already covered it in a previous run (we run every hour to catch todos from the previous hour)
 			// Also skip private todos that should not be replicated to twitter.
-			if todo.CompletedAt.Before(startOfLookbackWindow) || strings.Contains(todo.Body, PRIVATE_ENTITY_IDENTIFIER) {
+			if todo.CreatedAt.Before(startOfLookbackWindow) || strings.Contains(todo.Body, PRIVATE_ENTITY_IDENTIFIER) {
 				continue
 			}
 			tweetMessage := "✅ " + todo.Body + " #buildinpublic"
 			mediaIDs := []string{}
 
 			for _, attachment := range todo.Attachments {
-				mediaID, err := uploadAttachmentFromTodo(attachment, logger, twitter11Client)
+				mediaID, err := uploadAttachmentFromTodo(attachment, twitter11Client)
 				if err != nil {
 					return makeAndLogErrorResponse("Error uploading attachment", "upload_attachment_error", logger), err
 				}
@@ -164,10 +121,26 @@ func Handler(ctx context.Context) (Response, error) {
 
 	// Return a success message
 	logger.Info(SUCCESS_MESSAGE, "num_todos_tweeted", numTodosTweeted)
-	return Response{Message: SUCCESS_MESSAGE, NumTodosTweeted: numTodosTweeted}, nil
+	return Response{Message: SUCCESS_MESSAGE, NumTodosTweeted: 0}, nil //TODO: numtodostweeted
 }
 
-func uploadAttachmentFromTodo(attachment lib_wip.Attachment, logger *slog.Logger, twitter11Client *twitter11.TwitterApi) (string, error) {
+func setupTwitterClients(twitterAPIKey string, twitterAPIKeySecret string, twitterAccessToken string, twitterAccessTokenSecret string) (*twitter11.TwitterApi, *twitter2.Client) {
+	oauth1Config := oauth1.NewConfig(twitterAPIKey, twitterAPIKeySecret)
+	twitterHttpClient := oauth1Config.Client(oauth1.NoContext, &oauth1.Token{
+		Token:       twitterAccessToken,
+		TokenSecret: twitterAccessTokenSecret,
+	})
+	twitterHttpClient.Timeout = CONNECTION_TIMEOUT_DURATION
+	twitter11Client := twitter11.NewTwitterApiWithCredentials(twitterAccessToken, twitterAccessTokenSecret, twitterAPIKey, twitterAPIKeySecret)
+	twitter2Client := &twitter2.Client{
+		Authorizer: authorize{},
+		Client:     twitterHttpClient,
+		Host:       "https://api.twitter.com",
+	}
+	return twitter11Client, twitter2Client
+}
+
+func uploadAttachmentFromTodo(attachment lib_wip.Attachment, twitter11Client *twitter11.TwitterApi) (string, error) {
 	resp, err := http.Get(attachment.URL)
 	if err != nil {
 		return "", err
@@ -185,7 +158,7 @@ func uploadAttachmentFromTodo(attachment lib_wip.Attachment, logger *slog.Logger
 }
 
 func main() {
-	godotenv.Load("../../.env")
+	godotenv.Load()
 	if os.Getenv("RUN_WITHOUT_LAMBDA") == "true" {
 		Handler(context.TODO())
 	} else {
