@@ -1,7 +1,7 @@
-# wip-to-twitter-bridge
-**What**: Finds recently completed todo list items on WIP.co and posts them to twitter
+# wip-to-x-bridge
+**What**: Finds recently completed todos on WIP.co and posts them to twitter
 
-**Why**: Zapier costs money and this doesn't
+**Why**: Zapier doesn't support X
 
 # Requirements (only necessary if you want to build from source, otherwise just skip to the deployment instructions)
 - Go 1.x (Navigate to https://go.dev to install the binaries for your OS)
