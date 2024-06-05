@@ -1,5 +1,5 @@
 # wip-to-x-bridge
-**What**: Finds recently completed todos on WIP.co and posts them to twitter
+**What**: Finds recently completed todos on WIP.co and posts them to X
 
 **Why**: Zapier doesn't support X
 
