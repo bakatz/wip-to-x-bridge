@@ -88,7 +88,7 @@ func Handler(ctx context.Context) (Response, error) {
 			if todo.CreatedAt.Before(startOfLookbackWindow) || strings.Contains(todo.Body, PRIVATE_ENTITY_IDENTIFIER) {
 				continue
 			}
-			tweetMessage := "✅ " + todo.Body + " #buildinpublic"
+			tweetMessage := "✅ " + todo.Body
 			mediaIDs := []string{}
 
 			for _, attachment := range todo.Attachments {
