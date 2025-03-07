@@ -3,6 +3,8 @@
 
 **Why**: Zapier doesn't support X
 
+[![Buy me a coffee](https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=☕&slug=ben_makes_stuff&button_colour=FFDD00&font_colour=000000&font_family=Lato&outline_colour=000000&coffee_colour=ffffff)](https://www.buymeacoffee.com/ben_makes_stuff)
+
 # Requirements (only necessary if you want to build from source, otherwise just skip to the deployment instructions)
 - Go 1.x (Navigate to https://go.dev to install the binaries for your OS)
 - OSX or Linux (or WSL2 if running on windows)
